@@ -24,39 +24,46 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     <script>
-        // Inisialisasi peta
+        // 1. Inisialisasi peta
         var map = L.map("map").setView([-8.341896, 122.987972], 11);
 
-        // Tile Layer Base Map
+        // 2. Tile Layer Base Map
         var basemap = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-            attribution:
-                '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
         });
-
-        // Menambahkan basemap ke dalam peta
         basemap.addTo(map);
 
-        // GeoJSON Point Sarana Prasarana
+        // 3. GeoJSON Point Sarana Prasarana (Toponimi)
         var toponimi = L.geoJSON(null, {
-            // Style
             pointToLayer: function (feature, latlng) {
                 return L.marker(latlng, {
                     icon: L.icon({
-                        iconUrl: "image/home_marker.png", // icon marker
-                        iconSize: [30, 30], // ukuran icon
-                        iconAnchor: [24, 48], // posisi icon terhadap titik (point)
-                        popupAnchor: [0, -48], // posisi popup terhadap icon
-                        tooltipAnchor: [-16, -30], // posisi tooltip terhadap icon
+                        iconUrl: "image/home_marker.png",
+                        iconSize: [20, 20],
+                        iconAnchor: [15, 30],
+                        popupAnchor: [0, -30],
+                        tooltipAnchor: [-15, -15],
                     }),
                 });
             },
-            // onEachFeature
             onEachFeature: function (feature, layer) {
-                var popup_content =
-                    "Nama: " + feature.properties.TOPONIMI + "<br>" +
-                    "Koordinat: " + feature.geometry.coordinates[1] + ", " + feature.geometry.coordinates[0] + "<br>" +
-                    "<img src='image/" + feature.properties.image + "' alt='Foto' width='100' height='100'>";
+                // Cek data di Console F12 browser untuk melihat nama properti sebenarnya
+                console.log("Data Poin:", feature.properties);
 
+                // Ambil nama gambar dari GeoJSON, jika tidak ada/undefined pakai 'gunung-ile-lewero.jpg'
+                var namaFileGambar = feature.properties.image || "gunung-ile-lewero.jpg";
+
+                // Bikin konten Popup (ditambah onerror jika gambar lokal gagal dipanggil)
+                var popup_content = `
+                <div style="text-align: center;">
+                    <b>Nama:</b> ${feature.properties.TOPONIMI || '-'}<br>
+                    <b>Koordinat:</b> ${feature.geometry.coordinates[1]}, ${feature.geometry.coordinates[0]}<br><br>
+                    <img src="image/${namaFileGambar}" alt="Gambar Toponimi" width="180" style="border-radius: 6px;"
+                         onerror="this.onerror=null; this.src='https://placehold.co/180x120?text=Gambar+Tidak+Ditemukan';">
+                </div>
+            `;
+
+                // Bind popup langsung ke layer poin ini
                 layer.bindPopup(popup_content);
 
                 layer.on({
@@ -67,29 +74,33 @@
                         });
                     },
                 });
-            }
+            },
         });
 
-        // GeoJSON Polyline Jalan
+        // 4. GeoJSON Polyline Jalan
         var jalan = L.geoJSON(null, {
             style: function (feature) {
                 return {
-                    color: "red",
-                    opacity: 1,
-                    weight: 3,
+                    color: "#2d6cdf",
+                    weight: 2,
+                    opacity: 0.8,
                 };
             },
             onEachFeature: function (feature, layer) {
-                // variable popup content
-                var popup_content = "Fungsi: " + feature.properties.fungsi + "<br>" +
-                    "Panjang (m): " + feature.properties.panjang_m;
+                var fungsiJalan = feature.properties.NAMA_UNSUR || "Jalan";
+                var panjangKm = feature.properties.panjang_km ||
+                    (feature.properties.panjang_m ? (feature.properties.panjang_m / 1000).toFixed(3) : null) ||
+                    "-";
+
+                var popup_content = "Fungsi: " + fungsiJalan + "<br>" +
+                    "Panjang (km): " + panjangKm;
+
+                layer.bindPopup(popup_content);
 
                 layer.on({
-                    click: function (e) {
-                        jalan.bindPopup(popup_content);
-                    },
                     mouseover: function (e) {
-                        jalan.bindTooltip(feature.properties.fungsi, {
+                        layer.bringToFront();
+                        layer.bindTooltip(fungsiJalan, {
                             direction: "left",
                             sticky: true,
                         });
@@ -98,10 +109,8 @@
             },
         });
 
-
-        // GeoJSON Polygon Jumlah Penduduk
+        // 5. GeoJSON Polygon Jumlah Penduduk
         var jumlah_penduduk = L.geoJSON(null, {
-            // Style
             style: function (feature) {
                 return {
                     color: "gray",
@@ -111,52 +120,50 @@
                     fillOpacity: 0.4,
                 };
             },
-
-            // onEachFeature
             onEachFeature: function (feature, layer) {
-                // variable popup content
                 var popup_content = "Kecamatan: " + feature.properties.WADMKC + "<br>" +
                     "Jumlah Penduduk: " + feature.properties.penduduk;
 
+                layer.bindPopup(popup_content);
+
                 layer.on({
-                    click: function (e) {
-                        jumlah_penduduk.bindPopup(popup_content);
-                    },
                     mouseover: function (e) {
-                        jumlah_penduduk.bindTooltip(feature.properties.WADMKC, {
+                        layer.bindTooltip(feature.properties.WADMKC, {
                             direction: "left",
                             sticky: true,
                         });
                     },
                 });
             },
-
         });
-        $.getJSON("geojson/jalan.geojson", function (data) {
-            jalan.addData(data);
+
+        // Load Data GeoJSON
+        // Mengunduh semua file GeoJSON sekaligus dan mengatur hirarki tumpukannya
+        $.when(
+            $.getJSON("geojson/jumlah_penduduk.geojson"),
+            $.getJSON("geojson/jalan.geojson"),
+            $.getJSON("geojson/toponimi.geojson")
+        ).done(function (resPenduduk, resJalan, resToponimi) {
+            // 1. Tambahkan Poligon TERLEBIH DAHULU (Paling Bawah)
+            jumlah_penduduk.addData(resPenduduk[0]);
+            map.addLayer(jumlah_penduduk);
+
+            // 2. Tambahkan Jalan DI ATAS Poligon (Tengah)
+            jalan.addData(resJalan[0]);
             map.addLayer(jalan);
+
+            // 3. Tambahkan Titik Toponimi di PALING ATAS
+            toponimi.addData(resToponimi[0]);
+            map.addLayer(toponimi);
         });
-
-
-        $.getJSON("geojson/toponimi.geojson", function (data) {
-            toponimi.addData(data); // Menambahkan data ke dalam GeoJSON Point Sarana Prasarana
-            map.addLayer(toponimi); // Menambahkan GeoJSON Point Sarana Prasarana ke dalam peta
-        });
-
-        $.getJSON("geojson/jumlah_penduduk.geojson", function (data) {
-            jumlah_penduduk.addData(data); // Menambahkan data ke dalam GeoJSON Polygon Jumlah Penduduk
-            map.addLayer(jumlah_penduduk); // Menambahkan GeoJSON Polygon Jumlah Penduduk ke dalam peta
-        });
-
-
-        // Control Layer
+        // Control Layer (Perbaikan variabel basemap)
         var baseMaps = {
-            "OpenStreetMap": osm,
+            "OpenStreetMap": basemap,
         };
 
         var overlayMaps = {
-            "Toponimi": toponimi,
             "Jalan": jalan,
+            "Toponimi": toponimi,
             "Jumlah Penduduk": jumlah_penduduk
         };
 
